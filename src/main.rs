@@ -2,67 +2,19 @@ use std::thread;
 use std::time;
 
 use clap::Parser;
-use serde;
-use serde::ser::SerializeStruct;
+use rand::seq::SliceRandom;
 use serde_json;
-use zookeeper::{Stat, WatchedEvent, Watcher, ZkError, ZooKeeper, ZooKeeperExt};
+use zookeeper::{WatchedEvent, Watcher, ZkError, ZooKeeper, ZooKeeperExt};
 
 mod cmd;
+mod output;
+use output::{OpCode, OpResult, ZnodeStat};
 
+const CHARS: &[u8] = "abcdefghijklmnopqrstuvwxyz0123456789".as_bytes();
 struct LoggingWatcher;
 
 impl Watcher for LoggingWatcher {
     fn handle(&self, _e: WatchedEvent) {}
-}
-
-
-#[derive(Debug, Default, serde::Serialize)]
-struct OpResult {
-    #[serde(default)]
-    code: OpCode,
-    #[serde(default)]
-    znode_stat: Option<ZnodeStat>,
-    #[serde(default)]
-    value: Option<String>,
-    #[serde(default)]
-    error: Option<String>,
-}
-
-#[derive(Debug)]
-struct ZnodeStat(Stat);
-
-impl serde::Serialize for ZnodeStat {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
-    {
-        let mut state = serializer.serialize_struct("OpStat", 11)?;
-        state.serialize_field("czxid", &self.0.czxid)?;
-        state.serialize_field("mzxid", &self.0.mzxid)?;
-        state.serialize_field("ctime", &self.0.ctime)?;
-        state.serialize_field("mtime", &self.0.mtime)?;
-        state.serialize_field("version", &self.0.version)?;
-        state.serialize_field("cversion", &self.0.cversion)?;
-        state.serialize_field("aversion", &self.0.aversion)?;
-        state.serialize_field("ephemeral_owner", &self.0.ephemeral_owner)?;
-        state.serialize_field("data_length", &self.0.data_length)?;
-        state.serialize_field("num_children", &self.0.num_children)?;
-        state.serialize_field("pzxid", &self.0.pzxid)?;
-        state.end()
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-enum OpCode {
-    #[serde(rename = "success")]
-    Success,
-    #[serde(rename = "failed")]
-    Failed,
-}
-
-impl Default for OpCode {
-    fn default() -> Self {
-        OpCode::Success
-    }
 }
 
 /// try to connect to the server by the given address
@@ -87,13 +39,15 @@ fn connect_zk(addr: &str) -> Result<ZooKeeper, ZkError> {
 
 fn gen_random_data(size: usize) -> Vec<u8> {
     let mut data = Vec::with_capacity(size);
+    let mut rng = rand::thread_rng();
     for _ in 0..size {
-        data.push(rand::random::<u8>());
+        let c = CHARS.choose(&mut rng).unwrap();
+        data.push(*c);
     }
     data
 }
 
-fn create(address: &str, arg: cmd::Create) -> OpResult {
+fn create(address: &str, arg: cmd::Create) -> output::OpResult {
     let zk_cli = connect_zk(address).unwrap();
     zk_cli.ensure_path(arg.path.as_str()).unwrap();
     let data;
@@ -105,10 +59,18 @@ fn create(address: &str, arg: cmd::Create) -> OpResult {
     let res: OpResult;
     match zk_cli.set_data(&arg.path, data, None) {
         Err(e) => {
-            res = OpResult { code: OpCode::Failed, error: Some(e.to_string()), ..Default::default() };
+            res = OpResult {
+                code: OpCode::Failed,
+                error: Some(e.to_string()),
+                ..Default::default()
+            };
         }
         Ok(s) => {
-            res = OpResult { code: OpCode::Success, znode_stat: Some(ZnodeStat(s)), ..Default::default() };
+            res = OpResult {
+                code: OpCode::Success,
+                znode_stat: Some(ZnodeStat(s)),
+                ..Default::default()
+            };
         }
     };
     _ = zk_cli.close();
@@ -127,10 +89,18 @@ fn set(address: &str, arg: &cmd::Set) -> OpResult {
     let res: OpResult;
     match zk_cli.set_data(&arg.path, data, None) {
         Err(e) => {
-            res = OpResult { code: OpCode::Failed, error: Some(e.to_string()), ..Default::default() };
+            res = OpResult {
+                code: OpCode::Failed,
+                error: Some(e.to_string()),
+                ..Default::default()
+            };
         }
         Ok(s) => {
-            res = OpResult { code: OpCode::Success, znode_stat: Some(ZnodeStat(s)), ..Default::default() };
+            res = OpResult {
+                code: OpCode::Success,
+                znode_stat: Some(ZnodeStat(s)),
+                ..Default::default()
+            };
         }
     };
     _ = zk_cli.close();
@@ -141,8 +111,18 @@ fn delete(address: &str, arg: &cmd::Delete) -> OpResult {
     let zk_cli = connect_zk(address).unwrap();
     let res: OpResult;
     match zk_cli.delete(arg.path.as_str(), None) {
-        Ok(()) => { res = OpResult { code: OpCode::Success, ..Default::default() } }
-        Err(_) => { res = OpResult { code: OpCode::Failed, ..Default::default() } }
+        Ok(()) => {
+            res = OpResult {
+                code: OpCode::Success,
+                ..Default::default()
+            }
+        }
+        Err(_) => {
+            res = OpResult {
+                code: OpCode::Failed,
+                ..Default::default()
+            }
+        }
     }
     _ = zk_cli.close();
     res
@@ -152,8 +132,18 @@ fn delete_all(address: &str, arg: &cmd::DeleteAll) -> OpResult {
     let zk_cli = connect_zk(address).unwrap();
     let res: OpResult;
     match zk_cli.delete_recursive(arg.path.as_str()) {
-        Ok(()) => { res = OpResult { code: OpCode::Success, ..Default::default() } }
-        Err(_) => { res = OpResult { code: OpCode::Failed, ..Default::default() } }
+        Ok(()) => {
+            res = OpResult {
+                code: OpCode::Success,
+                ..Default::default()
+            }
+        }
+        Err(_) => {
+            res = OpResult {
+                code: OpCode::Failed,
+                ..Default::default()
+            }
+        }
     }
     _ = zk_cli.close();
     res
@@ -164,7 +154,10 @@ fn exists(address: &str, arg: &cmd::Exists) -> OpResult {
     let mut res: OpResult;
     match zk_cli.exists(arg.path.as_str(), false) {
         Ok(s) => {
-            res = OpResult { code: OpCode::Success, ..Default::default() };
+            res = OpResult {
+                code: OpCode::Success,
+                ..Default::default()
+            };
             match s {
                 Some(a) => {
                     res.znode_stat = Some(ZnodeStat(a));
@@ -174,7 +167,12 @@ fn exists(address: &str, arg: &cmd::Exists) -> OpResult {
                 }
             }
         }
-        Err(_) => { res = OpResult { code: OpCode::Failed, ..Default::default() } }
+        Err(_) => {
+            res = OpResult {
+                code: OpCode::Failed,
+                ..Default::default()
+            }
+        }
     }
     _ = zk_cli.close();
     res
@@ -202,7 +200,6 @@ fn get(address: &str, arg: cmd::Get) -> OpResult {
     _ = zk_cli.close();
     res
 }
-
 
 fn main() {
     let cli = cmd::Cli::parse();
