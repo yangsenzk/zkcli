@@ -79,7 +79,7 @@ fn create(address: &str, arg: cmd::Create) -> output::OpResult {
 
 fn set(address: &str, arg: &cmd::Set) -> OpResult {
     let zk_cli = connect_zk(address).unwrap();
-    zk_cli.ensure_path(arg.path.as_str()).unwrap();
+    // zk_cli.ensure_path(arg.path.as_str()).unwrap();
     let data;
     if arg.random_size > 0 || arg.value.is_none() {
         data = gen_random_data(arg.random_size);
@@ -117,9 +117,10 @@ fn delete(address: &str, arg: &cmd::Delete) -> OpResult {
                 ..Default::default()
             }
         }
-        Err(_) => {
+        Err(e) => {
             res = OpResult {
                 code: OpCode::Failed,
+                value: Some(e.to_string()),
                 ..Default::default()
             }
         }
@@ -138,9 +139,10 @@ fn delete_all(address: &str, arg: &cmd::DeleteAll) -> OpResult {
                 ..Default::default()
             }
         }
-        Err(_) => {
+        Err(e) => {
             res = OpResult {
                 code: OpCode::Failed,
+                error: Some(e.to_string()),
                 ..Default::default()
             }
         }
@@ -167,9 +169,10 @@ fn exists(address: &str, arg: &cmd::Exists) -> OpResult {
                 }
             }
         }
-        Err(_) => {
+        Err(e) => {
             res = OpResult {
                 code: OpCode::Failed,
+                error: Some(e.to_string()),
                 ..Default::default()
             }
         }
@@ -190,9 +193,10 @@ fn get(address: &str, arg: cmd::Get) -> OpResult {
                 ..Default::default()
             }
         }
-        Err(_) => {
+        Err(e) => {
             res = OpResult {
                 code: OpCode::Failed,
+                error: Some(e.to_string()),
                 ..Default::default()
             }
         }
