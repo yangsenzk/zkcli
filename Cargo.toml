@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.2.1", features = ["derive"] }
 rand = { version = "0.8.1" }
-zookeeper = { version = "0.7.0" }
+zookeeper-zk = { version = "0.7" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
