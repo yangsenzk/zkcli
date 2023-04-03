@@ -1,6 +1,6 @@
 use serde;
 use serde::ser::SerializeStruct;
-use zookeeper::Stat;
+use zookeeper_zk::Stat;
 
 /// The cli command output structure
 #[derive(Debug, Default, serde::Serialize)]
@@ -22,8 +22,8 @@ pub struct ZnodeStat(pub Stat);
 /// we need to wrap it in ZnodeStat struct and implement the Serialize trait.
 impl serde::Serialize for ZnodeStat {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+        where
+            S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("OpStat", 11)?;
         state.serialize_field("czxid", &self.0.czxid)?;

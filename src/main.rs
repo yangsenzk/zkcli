@@ -4,13 +4,15 @@ use std::time;
 use clap::Parser;
 use rand::seq::SliceRandom;
 use serde_json;
-use zookeeper::{WatchedEvent, Watcher, ZkError, ZooKeeper, ZooKeeperExt};
+use zookeeper_zk::{Acl, CreateMode, WatchedEvent, Watcher, ZkError, ZooKeeper, ZooKeeperExt};
+
+use output::{OpCode, OpResult, ZnodeStat};
 
 mod cmd;
 mod output;
-use output::{OpCode, OpResult, ZnodeStat};
 
 const CHARS: &[u8] = "abcdefghijklmnopqrstuvwxyz0123456789".as_bytes();
+
 struct LoggingWatcher;
 
 impl Watcher for LoggingWatcher {
@@ -69,6 +71,34 @@ fn create(address: &str, arg: cmd::Create) -> output::OpResult {
             res = OpResult {
                 code: OpCode::Success,
                 znode_stat: Some(ZnodeStat(s)),
+                ..Default::default()
+            };
+        }
+    };
+    _ = zk_cli.close();
+    res
+}
+
+fn create_ttl(address: &str, arg: cmd::CreateTTL) -> output::OpResult {
+    let zk_cli = connect_zk(address).unwrap();
+    let data;
+    if arg.random_size > 0 || arg.value.is_none() {
+        data = gen_random_data(arg.random_size);
+    } else {
+        data = arg.value.unwrap().as_bytes().to_vec();
+    }
+    let res: OpResult;
+    match zk_cli.create_with_ttl(arg.path.as_str(), data, Acl::open_unsafe().clone(), CreateMode::PersistentWithTTL, arg.ttl) {
+        Err(e) => {
+            res = OpResult {
+                code: OpCode::Failed,
+                error: Some(e.to_string()),
+                ..Default::default()
+            };
+        }
+        Ok(_s) => {
+            res = OpResult {
+                code: OpCode::Success,
                 ..Default::default()
             };
         }
@@ -211,6 +241,9 @@ fn main() {
     match cli.command.unwrap() {
         cmd::SubCommands::Create(arg) => {
             res = create(cli.address.as_str(), arg);
+        }
+        cmd::SubCommands::CreateTTL(arg) => {
+            res = create_ttl(cli.address.as_str(), arg);
         }
         cmd::SubCommands::Set(arg) => {
             res = set(cli.address.as_str(), &arg);

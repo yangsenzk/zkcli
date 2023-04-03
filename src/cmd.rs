@@ -14,6 +14,8 @@ pub struct Cli {
 pub enum SubCommands {
     #[command(name = "create")]
     Create(Create),
+    #[command(name = "create-ttl")]
+    CreateTTL(CreateTTL),
     #[command(name = "get")]
     Get(Get),
     #[command(name = "set")]
@@ -34,6 +36,18 @@ pub struct Create {
     pub value: Option<String>,
     #[arg(long, default_value_t = 0)]
     pub random_size: usize,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct CreateTTL {
+    #[arg(long)]
+    pub path: String,
+    #[arg(long)]
+    pub value: Option<String>,
+    #[arg(long, default_value_t = 0)]
+    pub random_size: usize,
+    #[arg(long)]
+    pub ttl: i64,
 }
 
 #[derive(Debug, Clone, Args)]
